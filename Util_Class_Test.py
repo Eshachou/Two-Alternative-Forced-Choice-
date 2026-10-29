@@ -1,23 +1,21 @@
 """
-Experiment_2AFC.py  --  ONE-FILE TEST VERSION (split into modules later).
-
-Run:  python Experiment_2AFC.py
+ONE-FILE TEST VERSION .
 
 Top to bottom: theme, logic, widgets, demo, then the window-building functions.
 The window only opens at the very bottom, inside main().
 
-Order inside this file (top to bottom, each part only uses parts above it):
+Order (top to bottom ) :
     1. Imports
     2. Theme       (colours, font, shared Entry style)
-    3. Logic       (parse_total, IntervalPicker: no widgets inside, so testable)
+    3. Logic       (parse_total, IntervalPicker: no widgets inside)
     4. Widgets     (Toggle, ActiveSurfaces, DestTemp, TrialSetup,
                     IntervalIndicator, ResponseDecisionPlot)
     5. Demo        (DemoTrialRunner: fake trials, delete when real trials exist)
 """
 
-# ------------------------------------------------------------------
+
 # 1. IMPORTS
-# ------------------------------------------------------------------
+
 import math
 import random
 import re
@@ -29,9 +27,9 @@ from matplotlib.figure import Figure
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 
 
-# ------------------------------------------------------------------
+
 # 2. THEME  (every colour and font in the program lives here)
-# ------------------------------------------------------------------
+
 Bg          = "#101827"   # window background
 Card        = "#1D2A3D"   # each panel sits on this lighter card
 InputBg     = "#111B2B"   # inside of the typing boxes
@@ -62,14 +60,13 @@ EntryStyle = dict(
 )
 
 
-# ------------------------------------------------------------------
-# 3. LOGIC  (no widgets in this part, so it can be tested without a window)
-# ------------------------------------------------------------------
-def parse_total(text, low=1, high=MAX_TRIALS):
+
+# 3. LOGIC  
+
+def ParseTotal(text, low=1, high=MAX_TRIALS):
     """Check the Total Trials text. Returns (number, None) if fine, or (None, message) if not.
 
-    Pure function: no widgets, so it can be tested on its own.
-    re.fullmatch accepts ONLY digits 0-9: no "2.5", no "1e3", no "1_0", no minus sign.
+    re.fullmatch accepts only digits 0-9: no "2.5", no "1e3", no "1_0", no minus sign.
     """
     text = text.strip()
     if text == "":
@@ -92,7 +89,6 @@ class IntervalPicker:
 
     def __init__(self, seed=None):
         if seed is None:
-            # SystemRandom asks the operating system for a truly unpredictable number
             seed = random.SystemRandom().randrange(2**32)
         self.seed = seed
         self.rng = random.Random(seed)    # our own dice; same seed -> same sequence
@@ -101,9 +97,8 @@ class IntervalPicker:
         return self.rng.choice(["A", "B"])
 
 
-# ------------------------------------------------------------------
 # 4. WIDGETS
-# ------------------------------------------------------------------
+
 class Toggle(tk.Canvas):
     """Zone's status indicator: active_color when on (green), deactive_color when off (red).
     Click it to flip the state.
@@ -167,7 +162,7 @@ class ActiveSurfaces:
             self.toggles.append(toggle)
 
     def get_active_zones(self):
-        # [1, 3, 4] means zones 1, 3 and 4 are on
+        
         return [i + 1 for i, t in enumerate(self.toggles) if t.active]
 
 
@@ -198,10 +193,10 @@ class DestTemp:
                  fg=Text, bg=Card).pack(side="left")
 
         # Duration: only if this panel wants one
-        self.duration = None            # None = "this panel has no duration"
+        self.duration = None            
         self.durationInput = None
         if showDuration:
-            self.duration = tk.StringVar(value="2.0")   # a starting value, not a rule
+            self.duration = tk.StringVar(value="2.0")  
             tk.Label(frame1, text="Duration (s)", font=(Font, 10),
                      fg=SmallLabels, bg=Card).pack(side="left", padx=(25, 8))
             self.durationInput = tk.Entry(frame1, textvariable=self.duration,
@@ -253,18 +248,17 @@ class TrialSetup:
                               **EntryStyle)
         self.entry.pack(side="left", padx=(10, 0), ipady=3)
 
-        # Empty text = takes no room. Only shows when something is wrong.
         self.error_label = tk.Label(self.frame, text="", font=(Font, 9),
                                     fg=OffColour, bg=Card)
         self.error_label.pack(side="left", padx=(8, 0))
 
-        # "write" = call _on_change every time the text changes (every key press)
+    
         self.total.trace_add("write", self._on_change)
 
-    def _on_change(self, *args):               # trace passes 3 values we do not need
+    def _on_change(self, *args):               
         text = self.total.get()
-        value, error = parse_total(text)
-        bad = error is not None and text.strip() != ""   # empty is "not yet", not "wrong"
+        value, error = ParseTotal(text)
+        bad = error is not None and text.strip() != ""   
 
         ring = OffColour if bad else Border
         focus_ring = OffColour if bad else Accent
@@ -276,7 +270,7 @@ class TrialSetup:
 
     def get_total(self):
         """The valid number of trials, or None if the box is empty or invalid."""
-        return parse_total(self.total.get())[0]
+        return ParseTotal(self.total.get())[0]
 
     def set_error(self, message):
         """Let other code show a message here (e.g. 'Enter total trials first')."""
@@ -288,11 +282,10 @@ class TrialSetup:
 
 
 class IntervalIndicator:
-    """Experimenter-only strip: which interval (A or B) holds the stimulus, and how strong.
+    """Which interval (A or B) holds the stimulus, and how strong.
 
     One compact row:  This Trial | [Interval A] [Interval B]
-    The interval with the stimulus gets a teal border, its temperature and how far that
-    is from baseline. Do NOT show this to the participant.
+    The interval with the stimulus gets a teal border, its temperature.
     """
 
     def __init__(self, parent):
@@ -305,7 +298,7 @@ class IntervalIndicator:
         row.pack(side="left", fill="x", expand=True)
         row.grid_rowconfigure(0, weight=1)
 
-        self.boxes = {}                       # {"A": (box, title, detail), "B": (...)}
+        self.boxes = {}                       
         for i, name in enumerate(("A", "B")):
             box = tk.Frame(row, bg=InputBg, highlightthickness=2, highlightbackground=Border)
             box.grid(row=0, column=i, padx=4, sticky="nsew")      # nsew = fill the cell fully
@@ -389,8 +382,7 @@ class ResponseDecisionPlot:
         ax.grid(True, color=Border, alpha=0.4, linewidth=0.5)
         ax.set_xlim(0.5, self.total + 0.5)
 
-        # Whole-number ticks only (a trial 2.5 does not exist). About 10 labels max:
-        # step = how many trials between labels, rounded UP so we never exceed ~10.
+       
         step = math.ceil(self.total / 10)
         ticks = sorted(set([1] + list(range(step, self.total + 1, step)) + [self.total]))
         ax.set_xticks(ticks)
@@ -400,21 +392,17 @@ class ResponseDecisionPlot:
             dots = [OnColour if c else OffColour for c in self.correct]
             ax.scatter(self.trials, self.temps, c=dots, s=60, zorder=2,
                        edgecolors="#050505")
-        lo = min([34] + [t - 0.5 for t in self.temps])   # LabVIEW's 34-40 range, grows if needed
+        lo = min([34] + [t - 0.5 for t in self.temps])   
         hi = max([40] + [t + 0.5 for t in self.temps])
         ax.set_ylim(lo, hi)
         self.fig.tight_layout()
-        self.canvas.draw_idle()                          # redraw when Tk is idle (doesn't block)
+        self.canvas.draw_idle()                         
 
 
-# ------------------------------------------------------------------
 # 5. DEMO  (fake trials; delete this section when the real experiment is wired in)
-# ------------------------------------------------------------------
+
 class DemoTrialRunner:
     """Runs invented trials so every new panel can be tested before real trials exist.
-
-    It is a class so it OWNS what it needs (plot, picker, panels), which means it does
-    not matter where in the file it is defined.
     """
     DEMO_BASELINE = 34.0       # invented
 
@@ -452,9 +440,9 @@ class DemoTrialRunner:
         self.setup.lock(False)
 
 
-# ------------------------------------------------------------------
-# 6. BUILD THE WINDOW  (this part used to be Main_2AFC.py)
-# ------------------------------------------------------------------
+
+# 6. BUILD THE WINDOW  
+
 # The protocol phases: (title, does it show a duration box?)
 PHASES = [
     ("Baseline (degC)",         True),
@@ -496,7 +484,7 @@ def build_left_column(parent):
 def build_right_column(parent):
     """Right column, top to bottom: [Total Trials | This Trial] bar, graph, demo buttons.
 
-    pack() gives space in the order you call it, and the LAST widgets packed are the
+    pack() gives space in the order you call it, and the last widgets packed are the
     first to be squeezed. So the demo row (must never vanish) is packed FIRST with
     side="bottom", then the top bar, then the graph, which takes all the space left.
     """
@@ -508,8 +496,7 @@ def build_right_column(parent):
 
     plot = ResponseDecisionPlot(parent, total_trials=50)
 
-    # The setup box tells the graph when the total changes. We hand over the METHOD
-    # plot.set_total without brackets: we are giving it the function, not calling it.
+    # The setup box tells the graph when the total changes. 
     setup = TrialSetup(top_bar, command=plot.set_total)
     setup.frame.pack(side="left", fill="y")
     indicator = IntervalIndicator(top_bar)
@@ -517,7 +504,7 @@ def build_right_column(parent):
 
     plot.frame.pack(side="top", fill="both", expand=True)
 
-    # --- DEMO ONLY: created AFTER every widget it needs exists ---
+    # --- DEMO ONLY: created after every widget it needs exists ---
     demo = DemoTrialRunner(plot, IntervalPicker(), setup, indicator)
     tk.Button(demo_row, text="Simulate trial (demo)",
               command=demo.simulate_trial).pack(side="left")
@@ -544,5 +531,5 @@ def main():
     root.mainloop()       # runs until the window closes; nothing after it executes until then
 
 
-if __name__ == "__main__":    # True only when you run THIS file, not when another file imports it
+if __name__ == "__main__":    # True only when you run this file, not when another file imports it
     main()
