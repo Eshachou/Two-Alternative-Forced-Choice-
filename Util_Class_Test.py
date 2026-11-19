@@ -20,7 +20,7 @@ import math
 import random
 import re
 import tkinter as tk
-
+from participant_screen import ParticipantScreen
 import matplotlib
 matplotlib.use("TkAgg")                       # must come BEFORE the matplotlib backend imports below
 from matplotlib.figure import Figure
@@ -515,7 +515,7 @@ def build_right_column(parent):
 
 def main():
     root = build_window()
-
+    participant_screen = ParticipantScreen(root)
     main_frame = tk.Frame(root, bg=Bg, padx=20, pady=12)
     main_frame.pack(fill="both", expand=True)
     build_header(main_frame)
@@ -527,7 +527,12 @@ def main():
 
     active_surfaces, panels = build_left_column(left)
     plot, setup, indicator = build_right_column(right)
+    def close_program():
+       # Close both windows together
+       root.destroy()
 
+    root.protocol("WM_DELETE_WINDOW", close_program)
+    participant_screen.window.protocol("WM_DELETE_WINDOW", close_program)
     root.mainloop()       # runs until the window closes; nothing after it executes until then
 
 
