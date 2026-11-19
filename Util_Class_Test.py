@@ -579,7 +579,12 @@ class TcsDevice:
                 stimDurations[i] = 99.999
             if stimDurations[i] < 0.001:
                 stimDurations[i] = 0.001
-        # check if speeds are equal
+        # this looks at the value of the first stim duration and then counts 
+        # the number of times this appears and then compares that to the 
+        # total length of the array - if that length and the number of 
+        # instances is the same then all stimulus durations are of the
+        # same lengthnso we can send the duration of all stimuli 
+        # in just one signal vs needing multiple
         if stimDurations.count(stimDurations[0]) == len(stimDurations):
             # yes: send all speeds in one command
             command = b'D0%05d' % (stimDurations[1]*1000) #D0 + 5 digit duration
@@ -603,7 +608,7 @@ class TcsDevice:
             if rampSpeeds[i] < 0.1:
                 rampSpeeds[i] = 0.1
         
-        # check if speeds are equal
+        # check if speeds are equal - check note above in set_durations for explanation
         if rampSpeeds.count(rampSpeeds[0]) == len(rampSpeeds):
             # yes: send all speeds in one command
             command = b'V0%04d' % (rampSpeeds[1]*10) # V0 + 4 digit ramp speed 
@@ -627,7 +632,7 @@ class TcsDevice:
             if returnSpeeds[i] < 0.1:
                 returnSpeeds[i] = 0.1
         
-        # check if speeds are equal
+        # check if speeds are equal - check note in set_duration for explanation
         if returnSpeeds.count(returnSpeeds[0]) == len(returnSpeeds):
             # yes: send all speeds in one command
             command = b'R0%04d' % (returnSpeeds[1]*10) # R0 + 4 digit ramp down speed 
@@ -651,7 +656,7 @@ class TcsDevice:
             if temperatures[i] < 0.1:
                 temperatures[i] = 0.1
         
-        # check if temperatures are equal
+        # check if temperatures are equal - see note above in set_duration for explanation
         if temperatures.count(temperatures[0]) == len(temperatures):
             # yes: send all speeds in one command
             command = b'C0%03d' % (temperatures[1]*10) # C0 + 3 digi taget temp for each zone
