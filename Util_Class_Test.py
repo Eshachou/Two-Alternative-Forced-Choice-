@@ -20,7 +20,6 @@ import math
 import random
 import re
 import tkinter as tk
-import tkinter as tk
 import serial
 from participant_screen import ParticipantScreen
 import matplotlib
