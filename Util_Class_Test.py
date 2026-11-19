@@ -20,6 +20,8 @@ import math
 import random
 import re
 import tkinter as tk
+import tkinter as tk
+import serial
 from participant_screen import ParticipantScreen
 import matplotlib
 matplotlib.use("TkAgg")                       # must come BEFORE the matplotlib backend imports below
@@ -62,7 +64,7 @@ EntryStyle = dict(
 
 
 # 3. LOGIC  
-
+#TODO: make sure this can check the text for everything - also rename method name
 def ParseTotal(text, low=1, high=MAX_TRIALS):
     """Check the Total Trials text. Returns (number, None) if fine, or (None, message) if not.
 
@@ -91,14 +93,14 @@ class IntervalPicker:
         if seed is None:
             seed = random.SystemRandom().randrange(2**32)
         self.seed = seed
-        self.rng = random.Random(seed)    # our own dice; same seed -> same sequence
+        self.rng = random.Random(seed)    
 
     def next(self):
         return self.rng.choice(["A", "B"])
 
 
 # 4. WIDGETS
-
+#TODO: add comments
 class Toggle(tk.Canvas):
     """Zone's status indicator: active_color when on (green), deactive_color when off (red).
     Click it to flip the state.
@@ -135,6 +137,7 @@ class Toggle(tk.Canvas):
                         fill=self.active_color if state else self.deactive_color)
 
 
+#TODO: add comments - do we need a toggle class or can we combine with this?
 class ActiveSurfaces:
     """Card with five Zone toggles. Read the result with get_active_zones()."""
 
@@ -184,7 +187,9 @@ class DestTemp:
             highlightthickness=1,
         )
 
-        frame1 = tk.Frame(self.baseFrame, bg=Card)   # top line
+        #frame 1 is the top box which contains the 
+        #protocol phase name and the (optional) duration box
+        frame1 = tk.Frame(self.baseFrame, bg=Card)   
         frame2 = tk.Frame(self.baseFrame, bg=Card)   # zone boxes
         frame1.pack(fill="x", pady=(0, 12))
         frame2.pack(fill="x")
@@ -193,6 +198,7 @@ class DestTemp:
                  fg=Text, bg=Card).pack(side="left")
 
         # Duration: only if this panel wants one
+        # should this more go between label vs Entry based on showDuration
         self.duration = None            
         self.durationInput = None
         if showDuration:
@@ -223,6 +229,9 @@ class DestTemp:
             frame2.grid_columnconfigure(i, weight=1, uniform="zone")
 
 
+#maybe also change the name of this class and reuse
+#also would like to move parseTotal into this or really 
+#move everything outside of it
 class TrialSetup:
     """Small one-line card: "Total Trials [ 20 ]" where the experimenter types the run length.
 
@@ -242,7 +251,7 @@ class TrialSetup:
 
         # StringVar on self: if it were a plain local variable Python would delete it
         # when __init__ ends, and the box would go blank.
-        self.total = tk.StringVar(value="")
+        self.total = tk.StringVar(value="") #maybe change this variable name
         self.entry = tk.Entry(self.frame, textvariable=self.total, width=6,
                               disabledbackground=InputBg, disabledforeground=SmallLabels,
                               **EntryStyle)
@@ -257,7 +266,7 @@ class TrialSetup:
 
     def _on_change(self, *args):               
         text = self.total.get()
-        value, error = ParseTotal(text)
+        value, error = ParseTotal(text) 
         bad = error is not None and text.strip() != ""   
 
         ring = OffColour if bad else Border
@@ -511,6 +520,190 @@ def build_right_column(parent):
     tk.Button(demo_row, text="Reset (demo)",
               command=demo.reset).pack(side="left", padx=(8, 0))
     return plot, setup, indicator
+
+
+'''
+7. TCS device class interface
+
+
+'''
+
+class TcsDevice:
+    def __init__(self, port='/dev/ttyACM0'):
+        # some initial parameters
+        self.baseline = 30.0
+        # Open serial port
+        self.s_port = serial.Serial(port, 115200, timeout = 2)
+        self.s_port.flushInput();
+        self.s_port.write(bytes(b'H'))
+        self.s_port.flushOutput()
+        firmware_msg = self.s_port.read(30)
+        print(firmware_msg)
+        self.s_port.flushInput()
+        id_msg = self.s_port.read(30)
+        print(id_msg)
+        self.s_port.flushInput()
+        # read the rest
+        rest = self.s_port.read(10000)
+        self.s_port.flushInput()
+
+    def set_quiet(self):
+        """
+        sets thermode to quiet mode
+        otherwise TCS sends regularly temperature data
+        (@1Hz if no stimulation, @100Hz during stimulation)
+        and that can corrupt dialog between PC and TCS
+        """
+        self.s_port.write(bytes(b'F'))
+        self.s_port.flushOutput()
+    
+    def set_baseline(self, baselineTemp):
+        """
+        sets baseline temperature in °C (also called neutral temperature)
+        :param baselineTemp: 1 float value (min 20°C, max 40°C)
+        """
+        if baselineTemp > 40:
+            baselineTemp = 40
+        if baselineTemp < 20:
+            baselineTemp = 20   
+        command = b'N%03d' % (baselineTemp*10) #N235 = 23.5 temp %03d is 3 digit integer
+        self.s_port.write(bytes(command))
+        self.s_port.flushOutput()
+        
+    def set_durations(self, stimDurations):
+        """
+        sets stimulus durations in s for all 5 zones
+        :param stimDurations: array of 5 values (min 0.001s, max 99.999s)
+        """
+        for i in range(5):
+            if stimDurations[i] > 99.999:
+                stimDurations[i] = 99.999
+            if stimDurations[i] < 0.001:
+                stimDurations[i] = 0.001
+        # this looks at the value of the first stim duration and then counts 
+        # the number of times this appears and then compares that to the 
+        # total length of the array - if that length and the number of 
+        # instances is the same then all stimulus durations are of the
+        # same lengthnso we can send the duration of all stimuli 
+        # in just one signal vs needing multiple
+        if stimDurations.count(stimDurations[0]) == len(stimDurations):
+            # yes: send all speeds in one command
+            command = b'D0%05d' % (stimDurations[1]*1000) #D0 + 5 digit duration
+            self.s_port.write(bytes(command))
+            self.s_port.flushOutput()
+        else:       
+            # no: send speeds in separate commands
+            for i in range(5):
+                command = b'D%d%05d' % ((i+1) , (stimDurations[i]*1000))
+                self.s_port.write(bytes(command))
+                self.s_port.flushOutput()
+    
+    def set_ramp_speed(self, rampSpeeds):
+        """
+        sets ramp up speeds in °C/s for all 5 zones
+        :param rampSpeeds: array of 5 values (min 0.1°C/s, max 300°C/s)
+        """
+        for i in range(5):
+            if rampSpeeds[i] > 300:
+                rampSpeeds[i] = 300
+            if rampSpeeds[i] < 0.1:
+                rampSpeeds[i] = 0.1
+        
+        # check if speeds are equal - check note above in set_durations for explanation
+        if rampSpeeds.count(rampSpeeds[0]) == len(rampSpeeds):
+            # yes: send all speeds in one command
+            command = b'V0%04d' % (rampSpeeds[1]*10) # V0 + 4 digit ramp speed 
+            self.s_port.write(bytes(command))
+            self.s_port.flushOutput()
+        else:        
+            # no: send speeds in separate commands
+            for i in range(5):
+                command = b'V%d%04d' % ((i+1), (rampSpeeds[i]*10))
+                self.s_port.write(bytes(command))
+                self.s_port.flushOutput()
+    
+    def set_return_speed(self, returnSpeeds):
+        """
+        sets ramp down/ return speeds in °C/s for all 5 zones
+        :param returnSpeeds: array of 5 values (min 0.1°C/s, max 300°C/s)
+        """
+        for i in range(5):
+            if returnSpeeds[i] > 300:
+                returnSpeeds[i] = 300
+            if returnSpeeds[i] < 0.1:
+                returnSpeeds[i] = 0.1
+        
+        # check if speeds are equal - check note in set_duration for explanation
+        if returnSpeeds.count(returnSpeeds[0]) == len(returnSpeeds):
+            # yes: send all speeds in one command
+            command = b'R0%04d' % (returnSpeeds[1]*10) # R0 + 4 digit ramp down speed 
+            self.s_port.write(bytes(command))
+            self.s_port.flushOutput()
+        else:        
+            # no: send speeds in separate commands
+            for i in range(5):
+                command = b'R%d%04d' % ((i+1), (returnSpeeds[i]*10))
+                self.s_port.write(bytes(command))
+                self.s_port.flushOutput()
+    
+    def set_temperatures(self, temperatures):
+        """
+        sets target temperatures in °C for all 5 zones
+        :param temperatures: array of 5 values (min 0.1°C, max 60°C)
+        """
+        for i in range(5):
+            if temperatures[i] > 60:
+                temperatures[i] = 60
+            if temperatures[i] < 0.1:
+                temperatures[i] = 0.1
+        
+        # check if temperatures are equal - see note above in set_duration for explanation
+        if temperatures.count(temperatures[0]) == len(temperatures):
+            # yes: send all speeds in one command
+            command = b'C0%03d' % (temperatures[1]*10) # C0 + 3 digi taget temp for each zone
+            self.s_port.write(bytes(command))
+            self.s_port.flushOutput()
+        else:        
+            # no: send speeds in separate commands
+            for i in range(5):
+                command = b'C%d%03d' % ((i+1), (temperatures[i]*10))
+                self.s_port.write(bytes(command))
+                self.s_port.flushOutput()
+    
+    def stimulate(self):
+        """
+        starts the stimulation protocol with the parameters that have been set
+        """
+        self.s_port.write(bytes(b'L'))
+    
+    def get_temperatures(self):
+        """
+        get current temperatures of zone 1 to 5 in °C
+        :return: returns an array of five temperatures or empty array if 
+            there is an error
+        """
+        self.s_port.flushInput()
+        self.s_port.write(bytes(b'E'))
+        self.s_port.flushOutput()
+        # '/r' + 'xxx?xxx?xxx?xxx?xxx?xxx' with '?' = sign '+' ou '-'
+        # seems that each xxx = # for each temp separated by either a + or -
+        # and this is the regex to grab all 3
+        # neutral + t1 to t5
+        data = self.s_port.read(24)
+        temperatures = [0, 0, 0, 0, 0]
+        if len(data) > 23:
+            neutral = float(data[2:4]);
+            temperatures[0] = float(data[5:8]) / 10;
+            temperatures[1] = float(data[9:12]) / 10;
+            temperatures[2] = float(data[13:16]) / 10;
+            temperatures[3] = float(data[17:20]) / 10;
+            temperatures[4] = float(data[21:24]) / 10;
+        else:
+            temperatures = []
+        return temperatures
+    
+    def close(self):
+        self.s_port.close()
 
 
 def main():
